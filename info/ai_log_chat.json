@@ -1,0 +1,8 @@
+{
+  "timestamp": "2026-06-17T15:59:31.375Z",
+  "logLine": "Jun 17 15:57:38 mail systemd[1]: Started Session 21278 of User root.",
+  "category": "Sistem / Genel Olay Günlüğü",
+  "severity": "info",
+  "explanation": "Sistem veya aktif servisler tarafından üretilen standart durum/faaliyet bilgilendirmesidir.",
+  "suggestion": "Log kaydı normal çalışmaya işaret ediyor. Herhangi bir sorun algılanmadı."
+}
