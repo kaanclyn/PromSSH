@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, clipboard } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
 export interface Connection {
@@ -97,7 +97,10 @@ const api = {
     return () => {
       ipcRenderer.removeListener(channel, listener)
     }
-  }
+  },
+
+  clipboardReadText: () => clipboard.readText(),
+  clipboardWriteText: (text: string) => clipboard.writeText(text)
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

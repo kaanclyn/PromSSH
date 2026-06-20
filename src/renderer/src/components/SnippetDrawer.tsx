@@ -202,7 +202,7 @@ export const SnippetDrawer: React.FC<SnippetDrawerProps> = ({ isOpen, onClose, c
   }
 
   const handleCopy = (snippet: Snippet): void => {
-    navigator.clipboard.writeText(snippet.command)
+    window.api.clipboardWriteText(snippet.command)
     setCopiedId(snippet.id)
     setTimeout(() => setCopiedId(null), 2000)
   }

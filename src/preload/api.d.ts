@@ -55,6 +55,8 @@ export interface ClientAPI {
   termClose: (terminalId: string) => void
   onTermData: (terminalId: string, callback: (data: string) => void) => () => void
   onTermClosed: (terminalId: string, callback: () => void) => () => void
+  clipboardReadText: () => string
+  clipboardWriteText: (text: string) => void
 }
 
 declare global {

@@ -121,6 +121,8 @@ const TerminalInstance: React.FC<TerminalInstanceProps> = ({
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
+  const [hasSelection, setHasSelection] = useState<boolean>(false)
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -131,8 +133,8 @@ const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       theme: {
         background: '#020617', // slate-950
         foreground: '#cbd5e1', // slate-300
-        cursor: '#6366f1',
-        selectionBackground: 'rgba(99, 102, 241, 0.3)'
+        cursor: '#14b8a6', // matching custom Teal theme
+        selectionBackground: 'rgba(20, 184, 166, 0.3)'
       },
       fontSize: 13,
       fontFamily: 'Consolas, monospace'
@@ -173,6 +175,53 @@ const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       term.write('\r\n\x1b[33mOturum kapatıldı.\x1b[0m\r\n')
     })
 
+    // Bind keyboard shortcuts for copy/paste
+    term.attachCustomKeyEventHandler((event) => {
+      const isV = event.key.toLowerCase() === 'v' || event.code === 'KeyV'
+      const isC = event.key.toLowerCase() === 'c' || event.code === 'KeyC'
+
+      // Ctrl+V (Paste)
+      if ((event.ctrlKey || event.metaKey) && isV) {
+        if (event.type === 'keydown') {
+          const text = window.api.clipboardReadText()
+          if (text) {
+            window.api.termWrite(terminalId, text)
+          }
+        }
+        return false
+      }
+
+      // Ctrl+C (Copy - only if text is selected)
+      if ((event.ctrlKey || event.metaKey) && isC) {
+        if (term.hasSelection()) {
+          if (event.type === 'keydown') {
+            const text = term.getSelection()
+            window.api.clipboardWriteText(text)
+          }
+          return false
+        }
+      }
+
+      return true
+    })
+
+    // Handle right-click context menu positioning
+    const handleContextMenu = (e: MouseEvent): void => {
+      e.preventDefault()
+      if (!term || !containerRef.current) return
+      setHasSelection(term.hasSelection())
+      const rect = containerRef.current.getBoundingClientRect()
+      setContextMenu({
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      })
+    }
+
+    const container = containerRef.current
+    if (container) {
+      container.addEventListener('contextmenu', handleContextMenu)
+    }
+
     // Handle window resize
     const handleResize = (): void => {
       if (fitAddonRef.current && termRef.current) {
@@ -182,6 +231,12 @@ const TerminalInstance: React.FC<TerminalInstanceProps> = ({
     }
     window.addEventListener('resize', handleResize)
 
+    // Close menu when clicking elsewhere
+    const handleWindowClick = (): void => {
+      setContextMenu(null)
+    }
+    window.addEventListener('click', handleWindowClick)
+
     // Fit terminal on first visibility
     if (isVisible) {
       setTimeout(handleResize, 100)
@@ -189,6 +244,10 @@ const TerminalInstance: React.FC<TerminalInstanceProps> = ({
 
     return () => {
       window.removeEventListener('resize', handleResize)
+      window.removeEventListener('click', handleWindowClick)
+      if (container) {
+        container.removeEventListener('contextmenu', handleContextMenu)
+      }
       unsubscribeData()
       unsubscribeClosed()
       window.api.termClose(terminalId)
@@ -209,10 +268,53 @@ const TerminalInstance: React.FC<TerminalInstanceProps> = ({
     }
   }, [isVisible])
 
+  const handleCopy = (e: React.MouseEvent): void => {
+    e.stopPropagation()
+    if (termRef.current) {
+      const text = termRef.current.getSelection()
+      window.api.clipboardWriteText(text)
+      termRef.current.clearSelection()
+      termRef.current.focus()
+    }
+    setContextMenu(null)
+  }
+
+  const handlePaste = (e: React.MouseEvent): void => {
+    e.stopPropagation()
+    const text = window.api.clipboardReadText()
+    if (text) {
+      window.api.termWrite(terminalId, text)
+    }
+    termRef.current?.focus()
+    setContextMenu(null)
+  }
+
   return (
-    <div
-      ref={containerRef}
-      className={`absolute inset-0 p-2 overflow-hidden bg-[#020617] ${isVisible ? 'block' : 'hidden'}`}
-    />
+    <div className={`absolute inset-0 bg-[#020617] ${isVisible ? 'block' : 'hidden'}`}>
+      <div
+        ref={containerRef}
+        className="absolute inset-0 p-2 overflow-hidden bg-[#020617]"
+      />
+      {contextMenu && (
+        <div
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          className="absolute bg-slate-900 border border-slate-800 text-slate-200 py-1 rounded shadow-xl z-50 text-xs font-semibold w-28 select-none transition-all"
+        >
+          <button
+            onClick={handleCopy}
+            disabled={!hasSelection}
+            className="w-full text-left px-3 py-1.5 hover:bg-teal-600 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-200 transition"
+          >
+            Kopyala
+          </button>
+          <button
+            onClick={handlePaste}
+            className="w-full text-left px-3 py-1.5 hover:bg-teal-600 hover:text-white transition"
+          >
+            Yapıştır
+          </button>
+        </div>
+      )}
+    </div>
   )
 }
