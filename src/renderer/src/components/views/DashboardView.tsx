@@ -42,32 +42,32 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ connectionId }) =>
         `
         # 1. Hostname
         hostname;
-        echo "---"
+        echo "===PROM_BLOCK==="
         # 2. OS Info
         if [ -f /etc/os-release ]; then
           cat /etc/os-release | grep PRETTY_NAME | cut -d= -f2 | tr -d '"'
         else
           uname -s
         fi;
-        echo "---"
+        echo "===PROM_BLOCK==="
         # 3. Kernel
         uname -r;
-        echo "---"
+        echo "===PROM_BLOCK==="
         # 4. Uptime
         uptime -p || uptime;
-        echo "---"
+        echo "===PROM_BLOCK==="
         # 5. CPU Model
         cat /proc/cpuinfo | grep 'model name' | head -n 1 | cut -d: -f2 || echo "Generic CPU"
-        echo "---"
+        echo "===PROM_BLOCK==="
         # 6. CPU Usage
         top -bn1 | grep "Cpu(s)" | sed "s/.*, *\\([0-9.]*\\)%* id.*/\\1/" | awk '{print 100 - $1}'
-        echo "---"
+        echo "===PROM_BLOCK==="
         # 7. Memory (free -m)
         free -m;
-        echo "---"
+        echo "===PROM_BLOCK==="
         # 8. Disk (df -h /)
         df -h / | tail -n 1
-        echo "---"
+        echo "===PROM_BLOCK==="
         # 9. Local IP
         hostname -I | awk '{print $1}' || echo "N/A"
         `
@@ -102,25 +102,25 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ connectionId }) =>
         connectionId,
         `
         hostname;
-        echo "---"
+        echo "===PROM_BLOCK==="
         if [ -f /etc/os-release ]; then
           cat /etc/os-release | grep PRETTY_NAME | cut -d= -f2 | tr -d '"'
         else
           uname -s
         fi;
-        echo "---"
+        echo "===PROM_BLOCK==="
         uname -r;
-        echo "---"
+        echo "===PROM_BLOCK==="
         uptime -p || uptime;
-        echo "---"
+        echo "===PROM_BLOCK==="
         cat /proc/cpuinfo | grep 'model name' | head -n 1 | cut -d: -f2 || echo "Generic CPU"
-        echo "---"
+        echo "===PROM_BLOCK==="
         top -bn1 | grep "Cpu(s)" | sed "s/.*, *\\([0-9.]*\\)%* id.*/\\1/" | awk '{print 100 - $1}'
-        echo "---"
+        echo "===PROM_BLOCK==="
         free -m;
-        echo "---"
+        echo "===PROM_BLOCK==="
         df -h / | tail -n 1
-        echo "---"
+        echo "===PROM_BLOCK==="
         hostname -I | awk '{print $1}' || echo "N/A"
         `
       )
@@ -139,7 +139,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ connectionId }) =>
   }
 
   const parseMetricsString = (stdout: string): SystemMetrics => {
-    const blocks = stdout.split('---').map((b) => b.trim())
+    const blocks = stdout.split('===PROM_BLOCK===').map((b) => b.trim())
 
     const hostname = blocks[0] || 'Unknown'
     const os = blocks[1] || 'Linux'

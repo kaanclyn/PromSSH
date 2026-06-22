@@ -68,26 +68,23 @@ export const PortCenterView: React.FC<PortCenterViewProps> = ({ connectionId }) 
       const port = parseInt(portStr) || 0
 
       // Extract process name and PID
-      // users:(("nginx",pid=840,fd=6))
       let processName = '-'
       let pid = '-'
-      const processPart = parts.slice(6).join(' ') // join the rest in case of spaces
 
-      if (processPart && processPart.includes('users:')) {
-        const nameMatch = processPart.match(/"([^"]+)"/)
-        if (nameMatch) processName = nameMatch[1]
+      const usersMatch = trimmed.match(/users:\(\("([^"]+)",pid=(\d+)/)
+      const slashMatch = trimmed.match(/(\d+)\/([^\s/:\(\)]+)/)
 
-        const pidMatch = processPart.match(/pid=(\d+)/)
-        if (pidMatch) pid = pidMatch[1]
+      if (usersMatch) {
+        processName = usersMatch[1]
+        pid = usersMatch[2]
+      } else if (slashMatch) {
+        pid = slashMatch[1]
+        processName = slashMatch[2]
       } else {
-        // Fallback check: sometimes netstat/ss has users in column 6 directly
-        const col6 = parts[5] || ''
-        if (col6.includes('pid=')) {
-          const nameMatch = col6.match(/"([^"]+)"/)
-          if (nameMatch) processName = nameMatch[1]
-          const pidMatch = col6.match(/pid=(\d+)/)
-          if (pidMatch) pid = pidMatch[1]
-        }
+        const pidMatch = trimmed.match(/pid=(\d+)/)
+        if (pidMatch) pid = pidMatch[1]
+        const nameMatch = trimmed.match(/"([^"]+)"/)
+        if (nameMatch) processName = nameMatch[1]
       }
 
       list.push({

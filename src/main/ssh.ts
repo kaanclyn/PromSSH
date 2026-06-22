@@ -120,8 +120,10 @@ export function execCommand(
     try {
       const { client } = getSession(getSessionKey(connectionId))
       
+      const startMarker = `===PROM_SSH_START_${Math.random().toString(36).substring(7)}===`
+
       // Prepend environment variables and shell profile sourcing to resolve NVM, node, pm2, docker, etc. in non-interactive shell.
-      const enrichedCommand = `[ -f /etc/profile ] && . /etc/profile; [ -f ~/.profile ] && . ~/.profile; [ -f ~/.bashrc ] && . ~/.bashrc; [ -s "$HOME/.nvm/nvm.sh" ] && . "$HOME/.nvm/nvm.sh"; export PATH="$PATH:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$HOME/.local/bin:$HOME/bin";\n${command}`
+      const enrichedCommand = `[ -f /etc/profile ] && . /etc/profile; [ -f ~/.profile ] && . ~/.profile; [ -f ~/.bashrc ] && . ~/.bashrc; [ -s "$HOME/.nvm/nvm.sh" ] && . "$HOME/.nvm/nvm.sh"; export PATH="$PATH:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$HOME/.local/bin:$HOME/bin";\necho "${startMarker}";\n${command}`
 
       client.exec(enrichedCommand, (err, stream) => {
         if (err) return reject(err)
@@ -131,6 +133,16 @@ export function execCommand(
 
         stream
           .on('close', (code: number) => {
+            const markerIndex = stdout.indexOf(startMarker)
+            if (markerIndex !== -1) {
+              stdout = stdout.substring(markerIndex + startMarker.length)
+              // Strip leading newline / carriage return
+              if (stdout.startsWith('\r\n')) {
+                stdout = stdout.substring(2)
+              } else if (stdout.startsWith('\n')) {
+                stdout = stdout.substring(1)
+              }
+            }
             resolve({ stdout, stderr, code })
           })
           .on('data', (data: any) => {
@@ -147,13 +159,54 @@ export function execCommand(
 }
 
 // SFTP List directory
-export function sftpList(connectionId: number | string, path: string): Promise<any[]> {
+export function sftpList(connectionId: number | string, pathStr: string): Promise<any[]> {
   return new Promise((resolve, reject) => {
     try {
       const { sftp } = getSession(getSessionKey(connectionId))
-      if (!sftp) return reject(new Error('SFTP client not initialized'))
+      if (!sftp) {
+        logDebug(`SFTP not initialized. Using shell fallback to list directory: ${pathStr}`)
+        const cmd = `cd "${pathStr}" && for f in .* *; do
+          if [ "$f" != "." ] && [ "$f" != ".." ] && { [ -e "$f" ] || [ -L "$f" ]; }; then
+            t="f"; [ -d "$f" ] && t="d"
+            sz=$(stat -c %s "$f" 2>/dev/null || echo 0)
+            mt=$(stat -c %Y "$f" 2>/dev/null || echo 0)
+            pm=$(stat -c %a "$f" 2>/dev/null || echo 0)
+            echo "$t|$f|$sz|$mt|$pm"
+          fi
+        done`
+        execCommand(connectionId, cmd)
+          .then((res) => {
+            if (res.code !== 0 && res.stderr) {
+              return reject(new Error(res.stderr))
+            }
+            const lines = res.stdout.split('\n')
+            const items: any[] = []
+            for (const line of lines) {
+              const trimmed = line.trim()
+              if (!trimmed) continue
+              const parts = trimmed.split('|')
+              if (parts.length >= 5) {
+                const type = parts[0]
+                const name = parts[1]
+                const size = parseInt(parts[2]) || 0
+                const mtime = (parseInt(parts[3]) || 0) * 1000
+                const perms = parseInt(parts[4]) || 0
+                items.push({
+                  name,
+                  isDirectory: type === 'd',
+                  size,
+                  mtime,
+                  permissions: perms
+                })
+              }
+            }
+            resolve(items)
+          })
+          .catch(reject)
+        return
+      }
 
-      sftp.readdir(path, (err, list) => {
+      sftp.readdir(pathStr, (err, list) => {
         if (err) return reject(err)
         // Format attributes
         const items = list.map((item) => ({
@@ -172,13 +225,29 @@ export function sftpList(connectionId: number | string, path: string): Promise<a
 }
 
 // SFTP Read file
-export function sftpReadFile(connectionId: number | string, path: string): Promise<string> {
+export function sftpReadFile(connectionId: number | string, pathStr: string): Promise<string> {
   return new Promise((resolve, reject) => {
     try {
       const { sftp } = getSession(getSessionKey(connectionId))
-      if (!sftp) return reject(new Error('SFTP client not initialized'))
+      if (!sftp) {
+        logDebug(`SFTP not initialized. Using shell fallback to read file: ${pathStr}`)
+        const cmd = `if command -v base64 >/dev/null 2>&1; then echo "===BASE64_START==="; base64 "${pathStr}"; else echo "===RAW_START==="; cat "${pathStr}"; fi`
+        execCommand(connectionId, cmd)
+          .then((res) => {
+            if (res.stdout.startsWith('===BASE64_START===')) {
+              const base64Data = res.stdout.substring('===BASE64_START==='.length).replace(/[\r\n\s]/g, '')
+              resolve(Buffer.from(base64Data, 'base64').toString('utf8'))
+            } else if (res.stdout.startsWith('===RAW_START===')) {
+              resolve(res.stdout.substring('===RAW_START==='.length))
+            } else {
+              resolve(res.stdout)
+            }
+          })
+          .catch(reject)
+        return
+      }
 
-      sftp.readFile(path, (err, data) => {
+      sftp.readFile(pathStr, (err, data) => {
         if (err) return reject(err)
         resolve(data.toString('utf8'))
       })
@@ -191,15 +260,36 @@ export function sftpReadFile(connectionId: number | string, path: string): Promi
 // SFTP Write file
 export function sftpWriteFile(
   connectionId: number | string,
-  path: string,
+  pathStr: string,
   content: string
 ): Promise<boolean> {
   return new Promise((resolve, reject) => {
     try {
       const { sftp } = getSession(getSessionKey(connectionId))
-      if (!sftp) return reject(new Error('SFTP client not initialized'))
+      if (!sftp) {
+        logDebug(`SFTP not initialized. Using shell fallback to write file: ${pathStr}`)
+        const base64Content = Buffer.from(content, 'utf8').toString('base64')
+        const delim = `PROM_EOF_${Math.random().toString(36).substring(7)}`
+        const cmd = `if command -v base64 >/dev/null 2>&1; then
+          echo "${base64Content}" | base64 -d > "${pathStr}"
+        else
+          cat << '${delim}' > "${pathStr}"
+${content}
+${delim}
+        fi`
+        execCommand(connectionId, cmd)
+          .then((res) => {
+            if (res.code === 0) {
+              resolve(true)
+            } else {
+              reject(new Error(res.stderr || 'File write failed'))
+            }
+          })
+          .catch(reject)
+        return
+      }
 
-      sftp.writeFile(path, content, 'utf8', (err) => {
+      sftp.writeFile(pathStr, content, 'utf8', (err) => {
         if (err) return reject(err)
         resolve(true)
       })
@@ -210,13 +300,22 @@ export function sftpWriteFile(
 }
 
 // SFTP Create directory
-export function sftpCreateDirectory(connectionId: number | string, path: string): Promise<boolean> {
+export function sftpCreateDirectory(connectionId: number | string, pathStr: string): Promise<boolean> {
   return new Promise((resolve, reject) => {
     try {
       const { sftp } = getSession(getSessionKey(connectionId))
-      if (!sftp) return reject(new Error('SFTP client not initialized'))
+      if (!sftp) {
+        logDebug(`SFTP not initialized. Using shell fallback to create directory: ${pathStr}`)
+        execCommand(connectionId, `mkdir -p "${pathStr}"`)
+          .then((res) => {
+            if (res.code === 0) resolve(true)
+            else reject(new Error(res.stderr || 'Create directory failed'))
+          })
+          .catch(reject)
+        return
+      }
 
-      sftp.mkdir(path, (err) => {
+      sftp.mkdir(pathStr, (err) => {
         if (err) return reject(err)
         resolve(true)
       })
@@ -229,21 +328,30 @@ export function sftpCreateDirectory(connectionId: number | string, path: string)
 // SFTP Delete file/directory
 export function sftpDelete(
   connectionId: number | string,
-  path: string,
+  pathStr: string,
   isDirectory: boolean
 ): Promise<boolean> {
   return new Promise((resolve, reject) => {
     try {
       const { sftp } = getSession(getSessionKey(connectionId))
-      if (!sftp) return reject(new Error('SFTP client not initialized'))
+      if (!sftp) {
+        logDebug(`SFTP not initialized. Using shell fallback to delete path: ${pathStr}`)
+        execCommand(connectionId, `rm -rf "${pathStr}"`)
+          .then((res) => {
+            if (res.code === 0) resolve(true)
+            else reject(new Error(res.stderr || 'Delete failed'))
+          })
+          .catch(reject)
+        return
+      }
 
       if (isDirectory) {
-        sftp.rmdir(path, (err) => {
+        sftp.rmdir(pathStr, (err) => {
           if (err) return reject(err)
           resolve(true)
         })
       } else {
-        sftp.unlink(path, (err) => {
+        sftp.unlink(pathStr, (err) => {
           if (err) return reject(err)
           resolve(true)
         })
