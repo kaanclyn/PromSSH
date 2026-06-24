@@ -14,6 +14,7 @@ export interface Connection {
   password?: string
   private_key?: string
   favorite: number // 0 or 1
+  protocol?: 'ssh' | 'ftp'
   created_at?: string
   last_connected?: string
 }
@@ -24,12 +25,29 @@ let sessionKey: Buffer | null = null
 // Initialize database
 export function initDB(): void {
   const appDataPath = app.getPath('userData')
-  const dbDir = join(appDataPath, 'PromSSH')
-  if (!fs.existsSync(dbDir)) {
-    fs.mkdirSync(dbDir, { recursive: true })
+  const oldDbDir = join(appDataPath, 'PromSSH')
+  const newDbDir = join(appDataPath, 'PromHub')
+
+  // Automatic data migration from old directory to new directory
+  if (fs.existsSync(oldDbDir) && !fs.existsSync(newDbDir)) {
+    try {
+      fs.mkdirSync(newDbDir, { recursive: true })
+      const oldDbPath = join(oldDbDir, 'database.db')
+      const newDbPath = join(newDbDir, 'database.db')
+      if (fs.existsSync(oldDbPath)) {
+        fs.copyFileSync(oldDbPath, newDbPath)
+        console.log('Successfully migrated database from PromSSH to PromHub.')
+      }
+    } catch (e) {
+      console.error('Database migration failed:', e)
+    }
   }
 
-  const dbPath = join(dbDir, 'database.db')
+  if (!fs.existsSync(newDbDir)) {
+    fs.mkdirSync(newDbDir, { recursive: true })
+  }
+
+  const dbPath = join(newDbDir, 'database.db')
   db = new Database(dbPath)
 
   // Create tables
@@ -53,6 +71,13 @@ export function initDB(): void {
       value TEXT NOT NULL
     );
   `)
+
+  // Run protocol migration
+  try {
+    db.prepare("ALTER TABLE connections ADD COLUMN protocol TEXT DEFAULT 'ssh'").run()
+  } catch (e) {
+    // Column already exists
+  }
 }
 
 // Check if master password exists in settings
@@ -145,7 +170,7 @@ function decryptText(encryptedText: string): string {
 // Get all connections
 export function getConnections(): Connection[] {
   // If database is locked, we only return non-sensitive fields
-  const rows = db.prepare('SELECT id, name, host, port, username, auth_type, favorite, created_at, last_connected, password_encrypted, private_key_encrypted FROM connections ORDER BY favorite DESC, name ASC').all() as any[]
+  const rows = db.prepare('SELECT id, name, host, port, username, auth_type, favorite, created_at, last_connected, password_encrypted, private_key_encrypted, protocol FROM connections ORDER BY favorite DESC, name ASC').all() as any[]
 
   return rows.map((row) => {
     const conn: Connection = {
@@ -156,6 +181,7 @@ export function getConnections(): Connection[] {
       username: row.username,
       auth_type: row.auth_type,
       favorite: row.favorite,
+      protocol: row.protocol || 'ssh',
       created_at: row.created_at,
       last_connected: row.last_connected
     }
@@ -188,8 +214,8 @@ export function addConnection(conn: Connection): number | bigint {
   const privateKeyEncrypted = conn.private_key ? encryptText(conn.private_key) : null
 
   const info = db.prepare(`
-    INSERT INTO connections (name, host, port, username, auth_type, password_encrypted, private_key_encrypted, favorite)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO connections (name, host, port, username, auth_type, password_encrypted, private_key_encrypted, favorite, protocol)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     conn.name,
     conn.host,
@@ -198,7 +224,8 @@ export function addConnection(conn: Connection): number | bigint {
     conn.auth_type,
     passwordEncrypted,
     privateKeyEncrypted,
-    conn.favorite
+    conn.favorite,
+    conn.protocol || 'ssh'
   )
 
   return info.lastInsertRowid
@@ -213,7 +240,7 @@ export function updateConnection(id: number, conn: Connection): boolean {
 
   const info = db.prepare(`
     UPDATE connections
-    SET name = ?, host = ?, port = ?, username = ?, auth_type = ?, password_encrypted = ?, private_key_encrypted = ?, favorite = ?
+    SET name = ?, host = ?, port = ?, username = ?, auth_type = ?, password_encrypted = ?, private_key_encrypted = ?, favorite = ?, protocol = ?
     WHERE id = ?
   `).run(
     conn.name,
@@ -224,6 +251,7 @@ export function updateConnection(id: number, conn: Connection): boolean {
     passwordEncrypted,
     privateKeyEncrypted,
     conn.favorite,
+    conn.protocol || 'ssh',
     id
   )
 

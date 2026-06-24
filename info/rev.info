@@ -1,0 +1,391 @@
+# PromHub Sistem Analizi Yeni Revizyon Notu
+
+## 21. Excel Export Modern Rapor Formatına Çevrilecek
+
+Mevcut Excel çıktısı çok düz ve görsel olarak zayıf kalıyor. Excel raporu klasik hücre listesi gibi değil, modern bir BT denetim raporu gibi tasarlanmalı.
+
+### İstenen Excel Yapısı
+
+Excel tek sayfa olmak zorunda değil. Aşağıdaki gibi sekmeli yapı kullanılmalı:
+
+```text
+1. Genel Özet
+2. İşletim Sistemi
+3. CPU & Anakart
+4. RAM
+5. GPU
+6. Diskler
+7. Ağ & İnternet
+8. Güvenlik
+9. Geliştirici Ortamı
+10. Süreçler
+11. Servisler
+12. Performans
+13. Riskler & Öneriler
+```
+
+### Excel Tasarım Kuralları
+
+* Üstte rapor başlığı ve cihaz bilgisi olmalı
+* Her bölüm ayrı kart/tablo görünümünde olmalı
+* Başlık satırları renkli ve belirgin olmalı
+* Skorlar büyük kartlar halinde gösterilmeli
+* Kritik/orta/iyi durumlar renkli badge gibi gösterilmeli
+* Sütun genişlikleri otomatik ayarlanmalı
+* Freeze pane kullanılmalı
+* Filtreli tablolar kullanılmalı
+* Uzun listeler ayrı sheet’e bölünmeli
+* Boş veriler `Bulunamadı` veya `Yetki Gerekli` olarak gösterilmeli
+* Excel açıldığında direkt okunabilir rapor gibi görünmeli
+
+---
+
+## 22. Excel İçerik Kalitesi Artırılacak
+
+Şu an export çok dolu olsa da daha profesyonel gösterilmeli.
+
+### Genel Özet Sheet
+
+Kartlar:
+
+```text
+Genel Sistem Sağlığı
+Donanım Kalitesi
+Anlık Performans
+Sistem Güvenliği
+Disk Sağlığı
+Ağ Bağlantısı
+Geliştirici Ortamı
+```
+
+Altında kısa yorumlar:
+
+```text
+Genel Durum: İyi
+Kritik Risk: Firewall kapalı
+Ağ Durumu: İnternet bağlantısı algılanamadı
+GPU: NVIDIA-SMI ile doğrulanmış
+```
+
+---
+
+## 23. Ağ Bilgisi Hatası Düzeltilecek
+
+Önceki sürümde ağ adaptörleri bulunuyordu ancak yeni JSON’da `Network` boş geliyor. Bu düzeltilmeli.
+
+### Kullanılacak PowerShell Sorguları
+
+```powershell
+Get-NetAdapter | Where-Object {$_.Status -eq "Up"}
+Get-NetIPConfiguration
+Get-NetIPAddress -AddressFamily IPv4
+Get-NetIPAddress -AddressFamily IPv6
+Get-DnsClientServerAddress
+Get-NetRoute
+ipconfig /all
+```
+
+### Wi-Fi Detayları İçin
+
+```powershell
+netsh wlan show interfaces
+```
+
+### Ethernet / Wi-Fi Kartlarında Gösterilecek Bilgiler
+
+* Adaptör adı
+* Açıklama
+* Durum
+* MAC adresi
+* IPv4
+* IPv6
+* Gateway
+* DNS
+* DHCP açık mı
+* Link speed
+* Interface index
+* Wi-Fi SSID
+* Wi-Fi sinyal gücü
+* Bağlantı tipi
+* Public IP
+* İnternet erişimi
+* Ping latency
+
+### Ağ Kartları Boş Gelirse
+
+Boş liste dönmek yerine şu gösterilmeli:
+
+```text
+Ağ adaptörleri okunamadı.
+Sebep: Yetki / PowerShell sorgu hatası / filtreleme hatası
+```
+
+---
+
+## 24. UI Daha Modüler Olmalı
+
+Ana ekranda sadece özet bilgiler görünmeli. Detaylar tıklanarak açılmalı.
+
+### Kart Davranışı
+
+Her ana kart tıklanabilir olmalı:
+
+```text
+CPU kartına tıkla → detay modal açılır
+RAM kartına tıkla → modül detayları açılır
+GPU kartına tıkla → NVIDIA-SMI detayları açılır
+Disk kartına tıkla → SMART / bölüm detayları açılır
+Ağ kartına tıkla → adaptör ve bağlantı detayları açılır
+Güvenlik kartına tıkla → Defender / Firewall / RDP detayları açılır
+```
+
+### Detay Modal İçeriği
+
+Her modalda:
+
+* Özet
+* Ham veri
+* Kaynak
+* Güvenilirlik durumu
+* PowerShell komutu
+* Öneri / uyarı
+
+gösterilmeli.
+
+---
+
+## 25. Canlı Veri Takibi Eklenmeli
+
+Sistem analiz ekranı sadece statik rapor olmamalı. Bazı bilgiler canlı takip edilmeli.
+
+### Canlı İzlenecek Veriler
+
+* RAM kullanımı
+* CPU kullanımı
+* GPU kullanımı
+* GPU sıcaklığı
+* GPU VRAM kullanımı
+* Disk okuma/yazma
+* Ağ upload/download
+* En çok CPU tüketen süreçler
+* En çok RAM tüketen süreçler
+
+### Güncelleme Aralığı
+
+```text
+Varsayılan: 3 saniye
+Seçenekler: 1 sn / 3 sn / 5 sn / 10 sn
+```
+
+### UI Notu
+
+Canlı değerler küçük grafikler, progress bar ve mini sparkline ile gösterilmeli.
+
+---
+
+## 26. Export Sonrası Bildirim Sistemi Eklenmeli
+
+Export tamamlandığında kullanıcıya bilgi mesajı gösterilmeli.
+
+### Örnek Bildirim
+
+```text
+Excel raporu başarıyla oluşturuldu.
+Konum: C:\Users\Kaan\Downloads\PromHub-System-Report-LAPTOP-SBCPR61H-2026-06-24.xlsx
+```
+
+### Bildirim Butonları
+
+Bildirim üzerinde şu aksiyonlar olmalı:
+
+```text
+Dosyayı Aç
+Klasörde Göster
+Yolu Kopyala
+Bildirimi Kapat
+```
+
+### Davranış
+
+* `Dosyayı Aç` → Excel dosyasını açar
+* `Klasörde Göster` → dosyanın bulunduğu klasörü açar
+* `Yolu Kopyala` → dosya yolunu panoya kopyalar
+* `Bildirimi Kapat` → bildirimi siler
+
+Electron için:
+
+```javascript
+shell.openPath(filePath)
+shell.showItemInFolder(filePath)
+clipboard.writeText(filePath)
+```
+
+---
+
+## 27. Export Butonları Revize Edilecek
+
+Üst sağdaki butonlar şu şekilde kalmalı:
+
+```text
+JSON Raporu İndir
+Excel Raporu İndir
+```
+
+Ek olarak export sırasında loading durumu gösterilmeli:
+
+```text
+Excel hazırlanıyor...
+JSON hazırlanıyor...
+```
+
+Export bitince:
+
+```text
+Excel aktarıldı
+JSON aktarıldı
+```
+
+---
+
+## 28. Excel Export Teknik İyileştirmeleri
+
+Excel üretimi için düz CSV mantığı kullanılmamalı. Gerçek `.xlsx` formatında modern rapor oluşturulmalı.
+
+### Kullanılabilecek Paketler
+
+```text
+exceljs
+xlsx
+```
+
+Önerilen:
+
+```text
+exceljs
+```
+
+Çünkü styling, sheet yönetimi, renk, genişlik, border, merge cell ve tablo tasarımı daha rahat yapılır.
+
+### Excel’de Kullanılacak Özellikler
+
+* Merge cells
+* Styled headers
+* Auto width
+* Freeze pane
+* Filter
+* Alternating row color
+* Score cards
+* Conditional formatting benzeri renkler
+* Çoklu sheet
+* Teknik veri tabloları
+* Özet dashboard sheet
+
+---
+
+## 29. Veri Kaynağı ve Hata Durumu Gösterilecek
+
+Her veri için kaynak bilgisi tutulmalı.
+
+Örnek:
+
+```json
+{
+  "value": "8 GB",
+  "source": "NVIDIA-SMI",
+  "confidence": "verified",
+  "status": "ok"
+}
+```
+
+Hata varsa:
+
+```json
+{
+  "value": null,
+  "source": "Win32_BaseBoard",
+  "confidence": "none",
+  "status": "error",
+  "error": "Access denied"
+}
+```
+
+UI tarafında hata gizlenmemeli, anlaşılır gösterilmeli:
+
+```text
+Anakart bilgisi okunamadı: Yönetici yetkisi gerekebilir.
+```
+
+---
+
+## 30. Daha Fazla Bilgi Toplanacak
+
+Sisteme şu ek bölümler de eklenmeli:
+
+### Servisler
+
+* Çalışan servisler
+* Duran servisler
+* Otomatik başlayan servisler
+* Şüpheli servisler
+
+### Başlangıç Uygulamaları
+
+* Startup uygulamaları
+* Registry startup kayıtları
+* Scheduled startup görevleri
+
+### Windows Update
+
+* Son güncelleme tarihi
+* Bekleyen güncellemeler
+* Pending reboot durumu
+
+### Portlar
+
+* Dinleyen TCP portları
+* Bağlantı kurmuş süreçler
+* Port / PID / Process eşleşmesi
+
+### Paylaşımlar
+
+* SMB paylaşımları
+* Açık paylaşımlar
+* Paylaşım izinleri
+
+### Remote Access
+
+* RDP
+* AnyDesk
+* TeamViewer
+* VNC
+* SSH
+
+### AI / GPU Ortamı
+
+* CUDA
+* cuDNN
+* Ollama modelleri
+* PyTorch
+* TensorFlow
+* ONNX
+* LM Studio
+
+---
+
+## 31. Genel Hedef
+
+PromHub Sistem Analiz Envanteri şu seviyeye çıkarılmalı:
+
+* Daha modern UI
+* Daha fazla veri
+* Tıklanabilir detay kartları
+* Canlı performans takibi
+* Doğrulanmış GPU bilgisi
+* Eksiksiz ağ adaptörü tespiti
+* Profesyonel Excel raporu
+* JSON ham veri raporu
+* Export sonrası kullanıcı bildirimi
+* Dosyayı aç / klasörde göster aksiyonları
+* Hata ve yetki sorunlarını anlaşılır gösterme
+
+Bu revizyonla PromHub sadece sistem bilgisi gösteren bir ekran değil, profesyonel bir BT analiz ve raporlama modülü haline gelir.

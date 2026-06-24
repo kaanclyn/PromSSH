@@ -11,6 +11,7 @@ export interface Connection {
   password?: string
   private_key?: string
   favorite: number
+  protocol?: 'ssh' | 'ftp'
   created_at?: string
   last_connected?: string
 }
@@ -100,7 +101,13 @@ const api = {
   },
 
   clipboardReadText: () => clipboard.readText(),
-  clipboardWriteText: (text: string) => clipboard.writeText(text)
+  clipboardWriteText: (text: string) => clipboard.writeText(text),
+  getLocalSystemInfo: () => ipcRenderer.invoke('system:get-info'),
+  getLiveTelemetry: () => ipcRenderer.invoke('system:get-live'),
+  openPath: (filePath: string) => ipcRenderer.invoke('win:open-path', filePath),
+  showItemInFolder: (filePath: string) => ipcRenderer.invoke('win:show-item-in-folder', filePath),
+  exportJson: (systemData: any) => ipcRenderer.invoke('system:export-json', systemData),
+  exportExcel: (systemData: any) => ipcRenderer.invoke('system:export-excel', systemData)
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

@@ -1,5 +1,5 @@
 appId: com.electron.app
-productName: promssh
+productName: PromHub
 directories:
   buildResources: build
 files:
@@ -12,7 +12,7 @@ files:
 asarUnpack:
   - resources/**
 win:
-  executableName: PromSSH
+  executableName: PromHub
   target:
     - target: nsis
       arch:
@@ -21,12 +21,12 @@ win:
       arch:
         - x64
 nsis:
-  artifactName: PromSSH-Setup.${ext}
-  shortcutName: PromSSH
-  uninstallDisplayName: PromSSH
+  artifactName: PromHub-Setup.${ext}
+  shortcutName: PromHub
+  uninstallDisplayName: PromHub
   createDesktopShortcut: always
 portable:
-  artifactName: PromSSH-Portable.${ext}
+  artifactName: PromHub-Portable.${ext}
 mac:
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:

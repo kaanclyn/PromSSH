@@ -2,6 +2,18 @@ import { Client, SFTPWrapper } from 'ssh2'
 import { ipcMain, BrowserWindow, dialog } from 'electron'
 import * as fs from 'fs'
 import * as path from 'path'
+import {
+  connectFTP,
+  disconnectFTP,
+  isFTPConnected,
+  ftpList,
+  ftpReadFile,
+  ftpWriteFile,
+  ftpCreateDirectory,
+  ftpDelete,
+  ftpUpload,
+  ftpDownload
+} from './ftp'
 
 interface SessionInfo {
   client: Client
@@ -430,6 +442,9 @@ export function closeTerminal(terminalId: string): void {
 export function registerSSHIPC(): void {
   ipcMain.handle('ssh:connect', async (_, { id, config }) => {
     try {
+      if (config.protocol === 'ftp' || config.protocol === 'ftps') {
+        return await connectFTP(id, config)
+      }
       return await connectSSH(id, config)
     } catch (e: any) {
       return { error: e.message }
@@ -437,16 +452,20 @@ export function registerSSHIPC(): void {
   })
 
   ipcMain.handle('ssh:disconnect', async (_, id) => {
+    await disconnectFTP(id)
     disconnectSSH(id)
     return true
   })
 
   ipcMain.handle('ssh:is-connected', async (_, id) => {
-    return isConnected(id)
+    return isConnected(id) || isFTPConnected(id)
   })
 
   ipcMain.handle('ssh:exec', async (_, { id, command }) => {
     try {
+      if (isFTPConnected(id)) {
+        return { error: 'FTP protocol does not support shell command execution.', stdout: '', stderr: 'FTP protocol does not support shell command execution.', code: -1 }
+      }
       return await execCommand(id, command)
     } catch (e: any) {
       return { error: e.message, stdout: '', stderr: e.message, code: -1 }
@@ -456,6 +475,9 @@ export function registerSSHIPC(): void {
   // SFTP Operations
   ipcMain.handle('sftp:list', async (_, { id, path }) => {
     try {
+      if (isFTPConnected(id)) {
+        return await ftpList(id, path)
+      }
       return await sftpList(id, path)
     } catch (e: any) {
       return { error: e.message }
@@ -464,6 +486,9 @@ export function registerSSHIPC(): void {
 
   ipcMain.handle('sftp:read', async (_, { id, path }) => {
     try {
+      if (isFTPConnected(id)) {
+        return await ftpReadFile(id, path)
+      }
       return await sftpReadFile(id, path)
     } catch (e: any) {
       return { error: e.message }
@@ -472,6 +497,9 @@ export function registerSSHIPC(): void {
 
   ipcMain.handle('sftp:write', async (_, { id, path, content }) => {
     try {
+      if (isFTPConnected(id)) {
+        return await ftpWriteFile(id, path, content)
+      }
       return await sftpWriteFile(id, path, content)
     } catch (e: any) {
       return { error: e.message }
@@ -480,6 +508,9 @@ export function registerSSHIPC(): void {
 
   ipcMain.handle('sftp:mkdir', async (_, { id, path }) => {
     try {
+      if (isFTPConnected(id)) {
+        return await ftpCreateDirectory(id, path)
+      }
       return await sftpCreateDirectory(id, path)
     } catch (e: any) {
       return { error: e.message }
@@ -488,6 +519,9 @@ export function registerSSHIPC(): void {
 
   ipcMain.handle('sftp:delete', async (_, { id, path, isDirectory }) => {
     try {
+      if (isFTPConnected(id)) {
+        return await ftpDelete(id, path, isDirectory)
+      }
       return await sftpDelete(id, path, isDirectory)
     } catch (e: any) {
       return { error: e.message }
@@ -566,6 +600,17 @@ export function registerSSHIPC(): void {
       return { success: false, error: 'Cancelled' }
     }
 
+    if (isFTPConnected(id)) {
+      for (const localPath of result.filePaths) {
+        const stats = fs.statSync(localPath)
+        const baseName = path.basename(localPath)
+        const remotePath = remoteDir === '/' ? `/${baseName}` : `${remoteDir}/${baseName}`
+        const transferId = Math.random().toString(36).substring(7)
+        ftpUpload(id, localPath, remotePath, window, transferId, stats.isDirectory())
+      }
+      return { success: true }
+    }
+
     const sessionKeyStr = getSessionKey(id)
     const session = activeSessions.get(sessionKeyStr)
     if (!session || !session.sftp) {
@@ -613,6 +658,13 @@ export function registerSSHIPC(): void {
     }
 
     const localPath = isDirectory ? path.join(result.filePaths[0], baseName) : result.filePath
+
+    if (isFTPConnected(id)) {
+      const transferId = Math.random().toString(36).substring(7)
+      ftpDownload(id, remotePath, localPath, window, transferId, isDirectory)
+      return { success: true }
+    }
+
     const sessionKeyStr = getSessionKey(id)
     const session = activeSessions.get(sessionKeyStr)
     if (!session || !session.sftp) {

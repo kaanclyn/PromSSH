@@ -8,7 +8,7 @@ interface LogCenterViewProps {
 interface LogSource {
   id: string
   name: string
-  type: 'file' | 'docker' | 'pm2' | 'systemd' | 'promssh'
+  type: 'file' | 'docker' | 'pm2' | 'systemd' | 'promhub'
   pathOrName: string
 }
 
@@ -97,14 +97,14 @@ const COMMON_ERRORS_GUIDE: GuideError[] = [
 
 export const LogCenterView: React.FC<LogCenterViewProps> = ({ connectionId }) => {
   const [sources, setSources] = useState<LogSource[]>([
-    { id: 'promssh_debug', name: 'PromSSH Uygulama & Hata Teşhis Logları', type: 'promssh', pathOrName: 'promssh' },
+    { id: 'promhub_debug', name: 'PromHub Uygulama & Hata Teşhis Logları', type: 'promhub', pathOrName: 'promhub' },
     { id: 'syslog', name: 'System Logs (Syslog)', type: 'file', pathOrName: '/var/log/syslog' },
     { id: 'authlog', name: 'Auth Logs', type: 'file', pathOrName: '/var/log/auth.log' },
     { id: 'nginx_access', name: 'Nginx Access Logs', type: 'file', pathOrName: '/var/log/nginx/access.log' },
     { id: 'nginx_error', name: 'Nginx Error Logs', type: 'file', pathOrName: '/var/log/nginx/error.log' },
     { id: 'journald', name: 'Systemd Journal', type: 'systemd', pathOrName: 'journald' }
   ])
-  const [selectedSource, setSelectedSource] = useState<string>('promssh_debug')
+  const [selectedSource, setSelectedSource] = useState<string>('promhub_debug')
   const [logLines, setLogLines] = useState<string[]>([])
   const [loading, setLoading] = useState<boolean>(false)
   const [searchQuery, setSearchQuery] = useState<string>('')
@@ -164,7 +164,7 @@ export const LogCenterView: React.FC<LogCenterViewProps> = ({ connectionId }) =>
       }
 
       setSources((prev) => {
-        const staticList = prev.filter((s) => s.type === 'file' || s.type === 'systemd' || s.type === 'promssh')
+        const staticList = prev.filter((s) => s.type === 'file' || s.type === 'systemd' || s.type === 'promhub')
         return [...staticList, ...dockerSources, ...pm2Sources]
       })
     } catch (e) {
@@ -178,7 +178,7 @@ export const LogCenterView: React.FC<LogCenterViewProps> = ({ connectionId }) =>
       const source = sources.find((s) => s.id === selectedSource)
       if (!source) return
 
-      if (source.type === 'promssh') {
+      if (source.type === 'promhub') {
         const logs = await window.api.sshGetDebugLogs()
         setLogLines(logs.length > 0 ? logs : ['Henüz bağlantı logu oluşturulmadı.'])
         setLoading(false)
@@ -240,7 +240,7 @@ export const LogCenterView: React.FC<LogCenterViewProps> = ({ connectionId }) =>
         category: 'Güvenlik / Yetkisiz Giriş Denemesi',
         severity: 'critical',
         explanation: 'Sunucuya yetkisiz bir kullanıcı adı veya şifre ile giriş denemesi yapılmıştır. Bu loglar sürekli tekrarlanıyorsa otomatik botlar tarafından yapılan kaba kuvvet (brute-force) saldırısı gerçekleşiyor demektir.',
-        suggestion: 'SSH portunuzu 22\'den başka bir porta taşıyın. Sunucuya Fail2ban kurarak saldırgan IP adreslerini otomatik banlayın. Şifreyle giriş yerine SSH Key yetkilendirmesi kullanın.'
+        suggestion: 'SSH portunuzu 22\'den başka bir porta taşıyın. Sunucuya Fail2ban kurarak saldırgan IP adreslerini otomatik banlayın. Şifrele giriş yerine SSH Key yetkilendirmesi kullanın.'
       }
     }
 
@@ -274,12 +274,12 @@ export const LogCenterView: React.FC<LogCenterViewProps> = ({ connectionId }) =>
       }
     }
 
-    // 6. PromSSH Debug / Keepalive
+    // 6. PromHub Debug / Keepalive
     if (lower.includes('latency check') || lower.includes('keepalive') || lower.includes('ping') || lower.includes('pong')) {
       return {
-        category: 'PromSSH Canlılık Takibi',
+        category: 'PromHub Canlılık Takibi',
         severity: 'info',
-        explanation: 'PromSSH uygulamasının sunucuyla kurduğu SSH tünelinin kopmasını engellemek amacıyla arka planda gönderilen canlılık (ping/keepalive) sinyalidir.',
+        explanation: 'PromHub uygulamasının sunucuyla kurduğu SSH tünelinin kopmasını engellemek amacıyla arka planda gönderilen canlılık (ping/keepalive) sinyalidir.',
         suggestion: 'Bu normal bir çalışma logudur. Bağlantının kopmasını önleyen mekanizma devrededir.'
       }
     }
@@ -378,7 +378,7 @@ export const LogCenterView: React.FC<LogCenterViewProps> = ({ connectionId }) =>
           </button>
 
           {/* Lines Count Selector */}
-          {selectedSource !== 'promssh_debug' && (
+          {selectedSource !== 'promhub_debug' && (
             <select
               className="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-transparent text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-700 dark:text-slate-350"
               value={linesCount}

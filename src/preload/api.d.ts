@@ -10,6 +10,7 @@ export interface Connection {
   password?: string
   private_key?: string
   favorite: number
+  protocol?: 'ssh' | 'ftp'
   created_at?: string
   last_connected?: string
 }
@@ -57,6 +58,12 @@ export interface ClientAPI {
   onTermClosed: (terminalId: string, callback: () => void) => () => void
   clipboardReadText: () => string
   clipboardWriteText: (text: string) => void
+  getLocalSystemInfo: () => Promise<any>
+  getLiveTelemetry: () => Promise<any>
+  openPath: (filePath: string) => Promise<{ success?: boolean; error?: string }>
+  showItemInFolder: (filePath: string) => Promise<{ success?: boolean; error?: string }>
+  exportJson: (systemData: any) => Promise<{ filePath?: string; error?: string }>
+  exportExcel: (systemData: any) => Promise<{ filePath?: string; error?: string }>
 }
 
 declare global {

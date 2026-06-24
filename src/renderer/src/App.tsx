@@ -13,6 +13,7 @@ import { LogCenterView } from './components/views/LogCenterView'
 import { TerminalView } from './components/views/TerminalView'
 import { SnippetDrawer } from './components/SnippetDrawer'
 import { InfoModal } from './components/InfoModal'
+import { LocalSystemView } from './components/views/LocalSystemView'
 import { Connection } from '../../preload/api'
 import { RefreshCw } from 'lucide-react'
 
@@ -26,6 +27,7 @@ function App(): React.JSX.Element {
   const [latency, setLatency] = useState<number>(-1)
   const [showSnippetDrawer, setShowSnippetDrawer] = useState<boolean>(false)
   const [showInfoModal, setShowInfoModal] = useState<boolean>(false)
+  const [showLocalPC, setShowLocalPC] = useState<boolean>(false)
 
   // Feature detection
   const [hasDocker, setHasDocker] = useState<boolean>(false)
@@ -80,7 +82,7 @@ function App(): React.JSX.Element {
         // Mark last connected
         await window.api.updateLastConnected(conn.id)
         setActiveConn(conn)
-        setView('dashboard')
+        setView(conn.protocol === 'ftp' ? 'files' : 'dashboard')
         setHasDocker(false) // reset until check
         setHasPM2(false)
       } else if (success && typeof success === 'object' && 'error' in success) {
@@ -110,7 +112,7 @@ function App(): React.JSX.Element {
 
   // Periodic Latency Ping check when SSH is connected
   useEffect(() => {
-    if (!activeConn || !activeConn.id) {
+    if (!activeConn || !activeConn.id || activeConn.protocol === 'ftp') {
       setLatency(-1)
       return
     }
@@ -146,7 +148,7 @@ function App(): React.JSX.Element {
         return (
           <FileExplorerView
             connectionId={activeConn.id}
-            initialPath="/var/www"
+            initialPath={activeConn.protocol === 'ftp' ? '/' : '/var/www'}
           />
         )
       case 'services':
@@ -219,7 +221,8 @@ function App(): React.JSX.Element {
             setView={setView}
             hasDocker={hasDocker}
             hasPM2={hasPM2}
-            onOpenSnippets={() => setShowSnippetDrawer(true)}
+            protocol={activeConn.protocol}
+            onOpenSnippets={activeConn.protocol === 'ftp' ? undefined : () => setShowSnippetDrawer(true)}
           />
           <div className="flex-1 flex flex-col overflow-hidden relative">
             {renderView()}
@@ -232,12 +235,16 @@ function App(): React.JSX.Element {
             )}
           </div>
         </div>
+      ) : showLocalPC ? (
+        // LOCAL COMPUTER SYSTEM SPECS VIEW
+        <LocalSystemView onBack={() => setShowLocalPC(false)} />
       ) : (
         // HOST LIST / MASTER PASSWORD ENTRY
         <HostList
           onConnect={handleConnect}
           isUnlocked={isUnlocked}
           onUnlockSuccess={handleUnlockSuccess}
+          onOpenLocalPCInfo={() => setShowLocalPC(true)}
         />
       )}
     </div>

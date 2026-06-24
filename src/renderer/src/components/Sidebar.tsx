@@ -16,6 +16,7 @@ interface SidebarProps {
   setView: (view: string) => void
   hasDocker: boolean
   hasPM2: boolean
+  protocol?: 'ssh' | 'ftp'
   onOpenSnippets?: () => void
 }
 
@@ -24,9 +25,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setView,
   hasDocker,
   hasPM2,
+  protocol = 'ssh',
   onOpenSnippets
 }) => {
-  const menuItems = [
+  const allMenuItems = [
     { id: 'dashboard', name: 'Dashboard', icon: <LayoutDashboard size={16} /> },
     { id: 'technology', name: 'Teknolojiler', icon: <Cpu size={16} /> },
     { id: 'files', name: 'Dosya Gezgini', icon: <FolderOpen size={16} /> },
@@ -38,6 +40,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'logs', name: 'Loglar', icon: <FileText size={16} /> },
     { id: 'terminal', name: 'Terminal', icon: <TerminalIcon size={16} /> }
   ]
+
+  const menuItems = protocol === 'ftp'
+    ? [{ id: 'files', name: 'Dosya Gezgini', icon: <FolderOpen size={16} /> }]
+    : allMenuItems
 
   return (
     <div className="w-64 bg-slate-100 dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 flex flex-col select-none transition-colors duration-300">

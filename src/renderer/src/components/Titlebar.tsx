@@ -55,7 +55,7 @@ export const Titlebar: React.FC<TitlebarProps> = ({
       {/* Left side: App Title & Connection status */}
       <div className="flex items-center gap-2.5 font-bold text-xs tracking-wider">
         <img src={logo} className="w-[18px] h-[18px] object-contain select-none" alt="Logo" />
-        <span className="font-black">PROMSSH</span>
+        <span className="font-black">PROMHUB</span>
         {activeHostName && (
           <>
             <span className="text-slate-350 dark:text-slate-700">/</span>

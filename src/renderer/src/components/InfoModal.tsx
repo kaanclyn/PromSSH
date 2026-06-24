@@ -27,7 +27,7 @@ export const InfoModal: React.FC<InfoModalProps> = ({ isOpen, onClose }) => {
           {/* Modal Header */}
           <div className="flex justify-between items-center mb-6">
             <div className="flex items-center gap-2">
-              <img src={logo} className="w-6 h-6 object-contain" alt="PROMSSH" />
+              <img src={logo} className="w-6 h-6 object-contain" alt="PROMHUB" />
               <span className="text-sm font-black tracking-wide text-slate-900 dark:text-white uppercase">
                 Uygulama Bilgisi
               </span>
@@ -46,13 +46,13 @@ export const InfoModal: React.FC<InfoModalProps> = ({ isOpen, onClose }) => {
             <div className="flex flex-col items-center text-center py-2">
               <div className="relative mb-3">
                 <div className="absolute inset-0 bg-indigo-500/10 rounded-full blur-xl opacity-60" />
-                <img src={logo} className="relative w-20 h-20 object-contain select-none" alt="PROMSSH Logo" />
+                <img src={logo} className="relative w-20 h-20 object-contain select-none" alt="PROMHUB Logo" />
               </div>
               <h4 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">
-                PROMSSH v1.0.0
+                PROMHUB v1.0.0
               </h4>
               <p className="text-[10px] text-indigo-600 dark:text-indigo-400 font-extrabold uppercase tracking-widest mt-1">
-                Gelişmiş SSH Sunucu Workspace & Kontrol Paneli
+                Gelişmiş Sunucu Workspace & Kontrol Paneli
               </p>
             </div>
 
@@ -63,7 +63,7 @@ export const InfoModal: React.FC<InfoModalProps> = ({ isOpen, onClose }) => {
                 Geliştirici & Lisans
               </h5>
               <p className="text-xs">
-                PromSSH; sunucu yönetim süreçlerini kolaylaştırmak, terminal erişimini görselleştirmek ve veritabanı kontrollü dosya gezginini tek bir çatı altında birleştirmek amacıyla <strong>PromSoftware</strong> tarafından geliştirilmiş yerel (local-first) bir araçtır.
+                PromHub; sunucu yönetim süreçlerini kolaylaştırmak, terminal erişimini görselleştirmek ve veritabanı kontrollü dosya gezginini tek bir çatı altında birleştirmek amacıyla <strong>PromSoftware</strong> tarafından geliştirilmiş yerel (local-first) bir araçtır.
               </p>
               <p className="text-xs">
                 Uygulama hem bireysel hem de ticari kullanım senaryoları için tamamen serbesttir ve herhangi bir kullanım kısıtlaması içermez.

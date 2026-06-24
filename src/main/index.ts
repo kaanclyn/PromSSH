@@ -4,6 +4,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { initDB, registerDBIPC } from './db'
 import { registerSSHIPC } from './ssh'
+import { registerSystemInfoIPC } from './systemInfo'
 
 function createWindow(): void {
   // Create the browser window.
@@ -21,6 +22,7 @@ function createWindow(): void {
   })
 
   mainWindow.on('ready-to-show', () => {
+    mainWindow.maximize()
     mainWindow.show()
   })
 
@@ -46,6 +48,7 @@ app.whenReady().then(() => {
   initDB()
   registerDBIPC()
   registerSSHIPC()
+  registerSystemInfoIPC()
 
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.electron')
@@ -77,6 +80,25 @@ app.whenReady().then(() => {
   ipcMain.on('win:close', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender)
     win?.close()
+  })
+
+  ipcMain.handle('win:open-path', async (_, filePath: string) => {
+    try {
+      const err = await shell.openPath(filePath)
+      if (err) return { error: err }
+      return { success: true }
+    } catch (e: any) {
+      return { error: e.message }
+    }
+  })
+
+  ipcMain.handle('win:show-item-in-folder', (_, filePath: string) => {
+    try {
+      shell.showItemInFolder(filePath)
+      return { success: true }
+    } catch (e: any) {
+      return { error: e.message }
+    }
   })
 
   createWindow()

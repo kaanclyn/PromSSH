@@ -8,9 +8,10 @@ interface HostListProps {
   onConnect: (conn: Connection) => void
   isUnlocked: boolean
   onUnlockSuccess: () => void
+  onOpenLocalPCInfo: () => void
 }
 
-export const HostList: React.FC<HostListProps> = ({ onConnect, isUnlocked, onUnlockSuccess }) => {
+export const HostList: React.FC<HostListProps> = ({ onConnect, isUnlocked, onUnlockSuccess, onOpenLocalPCInfo }) => {
   const [hasMasterPass, setHasMasterPass] = useState<boolean>(true)
   const [masterPassword, setMasterPassword] = useState<string>('')
   const [confirmPassword, setConfirmPassword] = useState<string>('')
@@ -32,6 +33,17 @@ export const HostList: React.FC<HostListProps> = ({ onConnect, isUnlocked, onUnl
   const [connPrivateKey, setConnPrivateKey] = useState<string>('')
   const [connFavorite, setConnFavorite] = useState<boolean>(false)
   const [showPasswordRaw, setShowPasswordRaw] = useState<boolean>(false)
+  const [connProtocol, setConnProtocol] = useState<'ssh' | 'ftp'>('ssh')
+
+  const handleProtocolChange = (proto: 'ssh' | 'ftp'): void => {
+    setConnProtocol(proto)
+    if (proto === 'ftp') {
+      setConnPort(21)
+      setConnAuthType('password')
+    } else {
+      setConnPort(22)
+    }
+  }
 
   // Load checks
   useEffect(() => {
@@ -100,7 +112,8 @@ export const HostList: React.FC<HostListProps> = ({ onConnect, isUnlocked, onUnl
       auth_type: connAuthType,
       password: connAuthType === 'password' ? connPassword : '',
       private_key: connAuthType === 'key' ? connPrivateKey : '',
-      favorite: connFavorite ? 1 : 0
+      favorite: connFavorite ? 1 : 0,
+      protocol: connProtocol
     }
 
     if (editingConn && editingConn.id) {
@@ -135,6 +148,7 @@ export const HostList: React.FC<HostListProps> = ({ onConnect, isUnlocked, onUnl
     setConnPassword('')
     setConnPrivateKey('')
     setConnFavorite(false)
+    setConnProtocol('ssh')
     setEditingConn(null)
   }
 
@@ -148,6 +162,7 @@ export const HostList: React.FC<HostListProps> = ({ onConnect, isUnlocked, onUnl
     setConnPassword(conn.password || '')
     setConnPrivateKey(conn.private_key || '')
     setConnFavorite(conn.favorite === 1)
+    setConnProtocol(conn.protocol || 'ssh')
     setShowAddModal(true)
   }
 
@@ -197,7 +212,7 @@ export const HostList: React.FC<HostListProps> = ({ onConnect, isUnlocked, onUnl
             <div className="relative">
               {/* Soft logo backing glow */}
               <div className="absolute inset-0 bg-indigo-500/10 rounded-full blur-xl opacity-60" />
-              <img src={logo} className="relative w-24 h-24 object-contain select-none" alt="PROMSSH Logo" />
+              <img src={logo} className="relative w-24 h-24 object-contain select-none" alt="PROMHUB Logo" />
             </div>
           </div>
 
@@ -287,18 +302,30 @@ export const HostList: React.FC<HostListProps> = ({ onConnect, isUnlocked, onUnl
             SSH bağlantılarınızı organize edin, terminal veya gelişmiş kontrol paneli üzerinden sunucunuzu yönetin.
           </p>
         </div>
-        <motion.button
-          whileHover={{ scale: 1.03 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => {
-            resetForm()
-            setShowAddModal(true)
-          }}
-          className="flex items-center gap-2 px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black transition-all duration-300 shadow-lg shadow-indigo-600/20 self-start md:self-auto uppercase tracking-wider cursor-pointer"
-        >
-          <Plus size={16} strokeWidth={3} />
-          Yeni Bağlantı
-        </motion.button>
+        <div className="flex items-center gap-3 self-start md:self-auto">
+          <motion.button
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={onOpenLocalPCInfo}
+            className="flex items-center gap-2 px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition-all duration-300 shadow-lg shadow-emerald-600/20 uppercase tracking-wider cursor-pointer"
+          >
+            <Sparkles size={16} strokeWidth={3} />
+            Kendi PC Analizi
+          </motion.button>
+          
+          <motion.button
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => {
+              resetForm()
+              setShowAddModal(true)
+            }}
+            className="flex items-center gap-2 px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black transition-all duration-300 shadow-lg shadow-indigo-600/20 uppercase tracking-wider cursor-pointer"
+          >
+            <Plus size={16} strokeWidth={3} />
+            Yeni Bağlantı
+          </motion.button>
+        </div>
       </div>
 
       {/* Search Bar */}
@@ -355,8 +382,11 @@ export const HostList: React.FC<HostListProps> = ({ onConnect, isUnlocked, onUnl
                   <h4 className="font-extrabold text-base text-slate-850 dark:text-slate-100 group-hover:text-slate-950 dark:group-hover:text-white transition truncate" title={conn.name}>
                     {conn.name}
                   </h4>
-                  <span className="text-slate-500 dark:text-slate-400 text-xs font-mono font-bold tracking-tight block mt-0.5 truncate">
-                    {conn.username}@{conn.host}:{conn.port}
+                  <span className="text-slate-500 dark:text-slate-400 text-xs font-mono font-bold tracking-tight flex items-center gap-1.5 mt-0.5 truncate">
+                    <span className="px-1.5 py-0.5 text-[9px] font-black uppercase rounded bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shrink-0">
+                      {conn.protocol || 'ssh'}
+                    </span>
+                    <span className="truncate">{conn.username}@{conn.host}:{conn.port}</span>
                   </span>
                 </div>
               </div>
@@ -426,6 +456,38 @@ export const HostList: React.FC<HostListProps> = ({ onConnect, isUnlocked, onUnl
 
               <form onSubmit={handleAddOrEditConnection} className="space-y-5">
                 <div>
+                  <label className="block text-[10px] font-extrabold text-slate-500 dark:text-slate-400 mb-2.5 uppercase tracking-widest">
+                    Bağlantı Protokolü
+                  </label>
+                  
+                  {/* Styled Protocol Selector Switch */}
+                  <div className="flex p-1 rounded-xl bg-slate-100 dark:bg-slate-955/80 border border-slate-200 dark:border-slate-850/80">
+                    <button
+                      type="button"
+                      onClick={() => handleProtocolChange('ssh')}
+                      className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all duration-200 uppercase tracking-wider ${
+                        connProtocol === 'ssh'
+                          ? 'bg-indigo-650 text-white shadow-md shadow-indigo-600/20'
+                          : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      SSH / SFTP
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleProtocolChange('ftp')}
+                      className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all duration-200 uppercase tracking-wider ${
+                        connProtocol === 'ftp'
+                          ? 'bg-indigo-650 text-white shadow-md shadow-indigo-600/20'
+                          : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      FTP / FTPS
+                    </button>
+                  </div>
+                </div>
+
+                <div>
                   <label className="block text-[10px] font-extrabold text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-widest">
                     Bağlantı İsmi
                   </label>
@@ -481,37 +543,39 @@ export const HostList: React.FC<HostListProps> = ({ onConnect, isUnlocked, onUnl
                   />
                 </div>
 
-                <div>
-                  <label className="block text-[10px] font-extrabold text-slate-500 dark:text-slate-400 mb-2.5 uppercase tracking-widest">
-                    Kimlik Doğrulama Yöntemi
-                  </label>
-                  
-                  {/* Styled Switch Tab */}
-                  <div className="flex p-1 rounded-xl bg-slate-100 dark:bg-slate-955/80 border border-slate-200 dark:border-slate-850/80">
-                    <button
-                      type="button"
-                      onClick={() => setConnAuthType('password')}
-                      className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all duration-200 uppercase tracking-wider ${
-                        connAuthType === 'password'
-                          ? 'bg-indigo-650 text-white shadow-md shadow-indigo-600/20'
-                          : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-                      }`}
-                    >
-                      Şifre
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setConnAuthType('key')}
-                      className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all duration-200 uppercase tracking-wider ${
-                        connAuthType === 'key'
-                          ? 'bg-indigo-650 text-white shadow-md shadow-indigo-600/20'
-                          : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-                      }`}
-                    >
-                      SSH Anahtarı
-                    </button>
+                {connProtocol === 'ssh' && (
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-slate-500 dark:text-slate-400 mb-2.5 uppercase tracking-widest">
+                      Kimlik Doğrulama Yöntemi
+                    </label>
+                    
+                    {/* Styled Switch Tab */}
+                    <div className="flex p-1 rounded-xl bg-slate-100 dark:bg-slate-955/80 border border-slate-200 dark:border-slate-850/80">
+                      <button
+                        type="button"
+                        onClick={() => setConnAuthType('password')}
+                        className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all duration-200 uppercase tracking-wider ${
+                          connAuthType === 'password'
+                            ? 'bg-indigo-650 text-white shadow-md shadow-indigo-600/20'
+                            : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                        }`}
+                      >
+                        Şifre
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConnAuthType('key')}
+                        className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all duration-200 uppercase tracking-wider ${
+                          connAuthType === 'key'
+                            ? 'bg-indigo-650 text-white shadow-md shadow-indigo-600/20'
+                            : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                        }`}
+                      >
+                        SSH Anahtarı
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {connAuthType === 'password' ? (
                   <div>
