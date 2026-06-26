@@ -148,7 +148,6 @@ function App(): React.JSX.Element {
         return (
           <FileExplorerView
             connectionId={activeConn.id}
-            initialPath={activeConn.protocol === 'ftp' ? '/' : '/var/www'}
           />
         )
       case 'services':

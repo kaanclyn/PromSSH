@@ -49,12 +49,13 @@ interface TransferItem {
 
 export const FileExplorerView: React.FC<FileExplorerViewProps> = ({
   connectionId,
-  initialPath = '/var/www'
+  initialPath
 }) => {
-  const [currentPath, setCurrentPath] = useState<string>(initialPath)
+  const [currentPath, setCurrentPath] = useState<string>('')
   const [files, setFiles] = useState<FileItem[]>([])
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<string>('')
+  const [isDragging, setIsDragging] = useState<boolean>(false)
 
   // Edit file states
   const [editingFilePath, setEditingFilePath] = useState<string | null>(null)
@@ -80,7 +81,26 @@ export const FileExplorerView: React.FC<FileExplorerViewProps> = ({
   ]
 
   useEffect(() => {
-    loadDirectory(currentPath)
+    const initPath = async () => {
+      setLoading(true)
+      try {
+        if (initialPath && initialPath !== '/var/www') {
+          setCurrentPath(initialPath)
+        } else {
+          const home = await window.api.sftpGetHome(connectionId)
+          setCurrentPath(home || '/')
+        }
+      } catch (e) {
+        setCurrentPath('/')
+      }
+    }
+    initPath()
+  }, [connectionId, initialPath])
+
+  useEffect(() => {
+    if (currentPath) {
+      loadDirectory(currentPath)
+    }
   }, [connectionId, currentPath])
 
   useEffect(() => {
@@ -116,6 +136,45 @@ export const FileExplorerView: React.FC<FileExplorerViewProps> = ({
       }
     } catch (e: any) {
       alert('Hata: ' + e.message)
+    }
+  }
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(true)
+  }
+
+  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+  }
+
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+
+    const filesList = e.dataTransfer.files
+    if (!filesList || filesList.length === 0) return
+
+    for (let i = 0; i < filesList.length; i++) {
+      const file = filesList[i]
+      const localPath = (file as any).path
+      if (localPath) {
+        try {
+          await window.api.sftpUploadDirect(connectionId, currentPath, localPath)
+        } catch (err: any) {
+          alert(`Yükleme Hatası (${file.name}): ` + err.message)
+        }
+      }
     }
   }
 
@@ -457,7 +516,28 @@ export const FileExplorerView: React.FC<FileExplorerViewProps> = ({
             </div>
 
             {/* Main File list */}
-            <div className="flex-1 overflow-y-auto p-6">
+            <div
+              className={`flex-1 overflow-y-auto p-6 relative transition-all duration-200 ${
+                isDragging ? 'bg-indigo-50/10 dark:bg-indigo-950/10' : ''
+              }`}
+              onDragOver={handleDragOver}
+              onDragEnter={handleDragEnter}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
+              {isDragging && (
+                <div className="absolute inset-0 bg-white/40 dark:bg-slate-950/50 backdrop-blur-[2px] border-2 border-dashed border-indigo-500 rounded-xl m-6 flex flex-col items-center justify-center z-50 pointer-events-none animate-fade-in">
+                  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col items-center gap-3">
+                    <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-650 dark:text-indigo-400 rounded-full animate-bounce">
+                      <Upload size={24} strokeWidth={2.5} />
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider">Dosyaları Buraya Bırakın</p>
+                      <p className="text-[10px] text-slate-500 font-semibold mt-1">Aktif dizine yüklemek için bırakın: <span className="font-mono bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">{currentPath}</span></p>
+                    </div>
+                  </div>
+                </div>
+              )}
               {loading ? (
                 <div className="h-full flex flex-col items-center justify-center text-slate-400">
                   <RefreshCw className="animate-spin mb-4" size={24} />

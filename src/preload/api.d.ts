@@ -40,6 +40,8 @@ export interface ClientAPI {
   sshGetDebugLogs: () => Promise<string[]>
   sshPing: (id: number | string) => Promise<number>
   sftpList: (id: number | string, path: string) => Promise<any[] | { error: string }>
+  sftpGetHome: (id: number | string) => Promise<string>
+  sftpUploadDirect: (id: number | string, remoteDir: string, localPath: string) => Promise<{ success: boolean; error?: string }>
   sftpRead: (id: number | string, path: string) => Promise<string | { error: string }>
   sftpWrite: (id: number | string, path: string, content: string) => Promise<boolean | { error: string }>
   sftpMkdir: (id: number | string, path: string) => Promise<boolean | { error: string }>

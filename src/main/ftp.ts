@@ -79,13 +79,41 @@ export function isFTPConnected(connectionId: number | string): boolean {
   return activeFTPSessions.get(String(connectionId))?.client.closed === false
 }
 
+// Helper to ensure main client is connected and auto-reconnect if idle
+async function ensureFTPConnected(connectionId: string, session: FTPSession): Promise<ftp.Client> {
+  if (session.client.closed) {
+    logDebug(`Reconnecting idle FTP connection for session ${connectionId}...`)
+    const secure = session.config.protocol === 'ftps' || session.config.port === 990
+    await session.client.access({
+      host: session.config.host,
+      port: session.config.port || 21,
+      user: session.config.username,
+      password: session.config.password,
+      secure: secure,
+      secureOptions: {
+        rejectUnauthorized: false
+      }
+    })
+  }
+  return session.client
+}
+
+// FTP Get current working directory (home directory)
+export async function ftpGetHome(connectionId: number | string): Promise<string> {
+  const session = activeFTPSessions.get(String(connectionId))
+  if (!session) throw new Error('No active FTP session found')
+  const client = await ensureFTPConnected(String(connectionId), session)
+  return await client.pwd()
+}
+
 // FTP List directory
 export async function ftpList(connectionId: number | string, remotePath: string): Promise<any[]> {
   const session = activeFTPSessions.get(String(connectionId))
   if (!session) throw new Error('No active FTP session found')
 
   logDebug(`Listing directory: ${remotePath}`)
-  const list = await session.client.list(remotePath)
+  const client = await ensureFTPConnected(String(connectionId), session)
+  const list = await client.list(remotePath)
   return list.map((item) => ({
     name: item.name,
     isDirectory: item.isDirectory,
@@ -101,6 +129,7 @@ export async function ftpReadFile(connectionId: number | string, remotePath: str
   if (!session) throw new Error('No active FTP session found')
 
   logDebug(`Reading file: ${remotePath}`)
+  const client = await ensureFTPConnected(String(connectionId), session)
   const chunks: Buffer[] = []
   const { Writable } = require('stream')
   const writer = new Writable({
@@ -110,7 +139,7 @@ export async function ftpReadFile(connectionId: number | string, remotePath: str
     }
   })
 
-  await session.client.downloadTo(writer, remotePath)
+  await client.downloadTo(writer, remotePath)
   return Buffer.concat(chunks).toString('utf8')
 }
 
@@ -124,10 +153,11 @@ export async function ftpWriteFile(
   if (!session) throw new Error('No active FTP session found')
 
   logDebug(`Writing file: ${remotePath}`)
+  const client = await ensureFTPConnected(String(connectionId), session)
   const { Readable } = require('stream')
   const reader = Readable.from([Buffer.from(content, 'utf8')])
 
-  await session.client.uploadFrom(reader, remotePath)
+  await client.uploadFrom(reader, remotePath)
   return true
 }
 
@@ -137,7 +167,8 @@ export async function ftpCreateDirectory(connectionId: number | string, remotePa
   if (!session) throw new Error('No active FTP session found')
 
   logDebug(`Creating directory: ${remotePath}`)
-  await session.client.ensureDir(remotePath)
+  const client = await ensureFTPConnected(String(connectionId), session)
+  await client.ensureDir(remotePath)
   return true
 }
 
@@ -151,15 +182,16 @@ export async function ftpDelete(
   if (!session) throw new Error('No active FTP session found')
 
   logDebug(`Deleting ${isDirectory ? 'directory' : 'file'}: ${remotePath}`)
+  const client = await ensureFTPConnected(String(connectionId), session)
   if (isDirectory) {
-    await session.client.removeDir(remotePath)
+    await client.removeDir(remotePath)
   } else {
-    await session.client.remove(remotePath)
+    await client.remove(remotePath)
   }
   return true
 }
 
-// FTP Upload background task
+// FTP Upload background task (using independent client connection)
 export async function ftpUpload(
   connectionId: number | string,
   localPath: string,
@@ -187,20 +219,33 @@ export async function ftpUpload(
     window.webContents.send('sftp:transfer-status', transfer)
   }
 
+  const client = new ftp.Client(20000)
   try {
+    const secure = session.config.protocol === 'ftps' || session.config.port === 990
+    await client.access({
+      host: session.config.host,
+      port: session.config.port || 21,
+      user: session.config.username,
+      password: session.config.password,
+      secure: secure,
+      secureOptions: {
+        rejectUnauthorized: false
+      }
+    })
+
     if (isDirectory) {
-      await session.client.ensureDir(remotePath)
-      await session.client.uploadFromDir(localPath)
+      await client.ensureDir(remotePath)
+      await client.uploadFromDir(localPath)
     } else {
-      session.client.trackProgress((info) => {
+      client.trackProgress((info) => {
         const progress = Math.round((info.bytesOverall / (transfer.size || 1)) * 100)
         transfer.progress = Math.min(99, progress)
         if (!window.isDestroyed()) {
           window.webContents.send('sftp:transfer-status', transfer)
         }
       })
-      await session.client.uploadFrom(localPath, remotePath)
-      session.client.trackProgress()
+      await client.uploadFrom(localPath, remotePath)
+      client.trackProgress()
     }
 
     transfer.status = 'completed'
@@ -210,16 +255,18 @@ export async function ftpUpload(
       window.webContents.send('sftp:refresh-directory', { remotePath })
     }
   } catch (err: any) {
-    session.client.trackProgress()
+    client.trackProgress()
     transfer.status = 'failed'
     transfer.error = err.message
     if (!window.isDestroyed()) {
       window.webContents.send('sftp:transfer-status', transfer)
     }
+  } finally {
+    client.close()
   }
 }
 
-// FTP Download background task
+// FTP Download background task (using independent client connection)
 export async function ftpDownload(
   connectionId: number | string,
   remotePath: string,
@@ -247,31 +294,44 @@ export async function ftpDownload(
     window.webContents.send('sftp:transfer-status', transfer)
   }
 
+  const client = new ftp.Client(20000)
   try {
+    const secure = session.config.protocol === 'ftps' || session.config.port === 990
+    await client.access({
+      host: session.config.host,
+      port: session.config.port || 21,
+      user: session.config.username,
+      password: session.config.password,
+      secure: secure,
+      secureOptions: {
+        rejectUnauthorized: false
+      }
+    })
+
     if (isDirectory) {
       const localParent = path.dirname(localPath)
       if (!fs.existsSync(localParent)) {
         fs.mkdirSync(localParent, { recursive: true })
       }
-      await session.client.downloadToDir(localPath, remotePath)
+      await client.downloadToDir(localPath, remotePath)
     } else {
       let size = 0
       try {
-        size = await session.client.size(remotePath)
+        size = await client.size(remotePath)
       } catch (e) {
         // ignore
       }
       transfer.size = size
 
-      session.client.trackProgress((info) => {
+      client.trackProgress((info) => {
         const progress = Math.round((info.bytesOverall / (size || 1)) * 100)
         transfer.progress = Math.min(99, progress)
         if (!window.isDestroyed()) {
           window.webContents.send('sftp:transfer-status', transfer)
         }
       })
-      await session.client.downloadTo(localPath, remotePath)
-      session.client.trackProgress()
+      await client.downloadTo(localPath, remotePath)
+      client.trackProgress()
     }
 
     transfer.status = 'completed'
@@ -280,11 +340,13 @@ export async function ftpDownload(
       window.webContents.send('sftp:transfer-status', transfer)
     }
   } catch (err: any) {
-    session.client.trackProgress()
+    client.trackProgress()
     transfer.status = 'failed'
     transfer.error = err.message
     if (!window.isDestroyed()) {
       window.webContents.send('sftp:transfer-status', transfer)
     }
+  } finally {
+    client.close()
   }
 }

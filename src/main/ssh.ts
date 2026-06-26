@@ -12,7 +12,8 @@ import {
   ftpCreateDirectory,
   ftpDelete,
   ftpUpload,
-  ftpDownload
+  ftpDownload,
+  ftpGetHome
 } from './ftp'
 
 interface SessionInfo {
@@ -438,6 +439,38 @@ export function closeTerminal(terminalId: string): void {
   }
 }
 
+// SFTP Get current working directory (home directory)
+export function sftpGetHome(connectionId: number | string): Promise<string> {
+  return new Promise((resolve) => {
+    try {
+      const session = getSession(getSessionKey(connectionId))
+      const { sftp } = session
+      if (!sftp) {
+        execCommand(connectionId, 'pwd')
+          .then((res) => {
+            if (res.code === 0) {
+              resolve(res.stdout.trim() || '/')
+            } else {
+              resolve('/')
+            }
+          })
+          .catch(() => resolve('/'))
+        return
+      }
+
+      sftp.realpath('.', (err, absPath) => {
+        if (err) {
+          resolve('/')
+        } else {
+          resolve(absPath || '/')
+        }
+      })
+    } catch (e) {
+      resolve('/')
+    }
+  })
+}
+
 // Register all SSH IPC channels
 export function registerSSHIPC(): void {
   ipcMain.handle('ssh:connect', async (_, { id, config }) => {
@@ -469,6 +502,17 @@ export function registerSSHIPC(): void {
       return await execCommand(id, command)
     } catch (e: any) {
       return { error: e.message, stdout: '', stderr: e.message, code: -1 }
+    }
+  })
+
+  ipcMain.handle('sftp:get-home', async (_, id) => {
+    try {
+      if (isFTPConnected(id)) {
+        return await ftpGetHome(id)
+      }
+      return await sftpGetHome(id)
+    } catch (e: any) {
+      return '/'
     }
   })
 
@@ -578,6 +622,43 @@ export function registerSSHIPC(): void {
         fs.mkdirSync(dir, { recursive: true })
       }
       fs.writeFileSync(targetPath, JSON.stringify(logData, null, 2), 'utf8')
+      return { success: true }
+    } catch (e: any) {
+      return { error: e.message }
+    }
+  })
+
+  ipcMain.handle('sftp:upload-direct', async (event, { id, remoteDir, localPath }) => {
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (!window) return { error: 'No window found' }
+
+    try {
+      if (!fs.existsSync(localPath)) {
+        return { error: 'Lokal dosya mevcut değil.' }
+      }
+
+      const stats = fs.statSync(localPath)
+      const baseName = path.basename(localPath)
+      const remotePath = remoteDir === '/' ? `/${baseName}` : `${remoteDir}/${baseName}`
+      const transferId = Math.random().toString(36).substring(7)
+
+      if (isFTPConnected(id)) {
+        ftpUpload(id, localPath, remotePath, window, transferId, stats.isDirectory())
+        return { success: true }
+      }
+
+      const sessionKeyStr = getSessionKey(id)
+      const session = activeSessions.get(sessionKeyStr)
+      if (!session || !session.sftp) {
+        return { error: 'SFTP client not initialized' }
+      }
+
+      if (stats.isDirectory()) {
+        uploadDirectoryBackground(window, session.sftp, localPath, remotePath, transferId)
+      } else {
+        uploadFileBackground(window, session.sftp, localPath, remotePath, transferId, stats.size)
+      }
+
       return { success: true }
     } catch (e: any) {
       return { error: e.message }

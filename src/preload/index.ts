@@ -45,6 +45,9 @@ const api = {
   sshGetDebugLogs: () => ipcRenderer.invoke('ssh:get-debug-logs'),
   sshPing: (id: number | string) => ipcRenderer.invoke('ssh:ping', id),
   sftpList: (id: number | string, path: string) => ipcRenderer.invoke('sftp:list', { id, path }),
+  sftpGetHome: (id: number | string) => ipcRenderer.invoke('sftp:get-home', id),
+  sftpUploadDirect: (id: number | string, remoteDir: string, localPath: string) =>
+    ipcRenderer.invoke('sftp:upload-direct', { id, remoteDir, localPath }),
   sftpRead: (id: number | string, path: string) => ipcRenderer.invoke('sftp:read', { id, path }),
   sftpWrite: (id: number | string, path: string, content: string) => ipcRenderer.invoke('sftp:write', { id, path, content }),
   sftpMkdir: (id: number | string, path: string) => ipcRenderer.invoke('sftp:mkdir', { id, path }),
