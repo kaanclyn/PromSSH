@@ -64,6 +64,8 @@ export interface ClientAPI {
   showItemInFolder: (filePath: string) => Promise<{ success?: boolean; error?: string }>
   exportJson: (systemData: any) => Promise<{ filePath?: string; error?: string }>
   exportExcel: (systemData: any) => Promise<{ filePath?: string; error?: string }>
+  importFileZilla: () => Promise<{ success: boolean; count?: number; error?: string }>
+  exportFileZilla: () => Promise<{ success: boolean; error?: string }>
 }
 
 declare global {

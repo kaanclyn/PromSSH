@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, Server, Star, Trash2, Edit2, ShieldAlert, Eye, EyeOff, Search, Sparkles, X, ChevronRight } from 'lucide-react'
+import { Plus, Server, Star, Trash2, Edit2, ShieldAlert, Eye, EyeOff, Search, Sparkles, X, ChevronRight, Upload, Download } from 'lucide-react'
 import { Connection } from '../../../preload/api'
 import { motion, AnimatePresence } from 'framer-motion'
 import logo from '../assets/logo.png'
@@ -22,6 +22,7 @@ export const HostList: React.FC<HostListProps> = ({ onConnect, isUnlocked, onUnl
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [showAddModal, setShowAddModal] = useState<boolean>(false)
   const [editingConn, setEditingConn] = useState<Connection | null>(null)
+  const [filezillaLoading, setFilezillaLoading] = useState<boolean>(false)
 
   // Connection Form State
   const [connName, setConnName] = useState<string>('')
@@ -150,6 +151,39 @@ export const HostList: React.FC<HostListProps> = ({ onConnect, isUnlocked, onUnl
     setConnFavorite(false)
     setConnProtocol('ssh')
     setEditingConn(null)
+  }
+
+  const handleImportFileZilla = async (): Promise<void> => {
+    setFilezillaLoading(true)
+    try {
+      const res = await window.api.importFileZilla()
+      if (res && res.error) {
+        alert('FileZilla İçe Aktarma Hatası: ' + res.error)
+      } else if (res && res.success) {
+        alert(`Başarılı! ${res.count || 0} bağlantı FileZilla'dan içe aktarıldı.`)
+        loadConnections()
+      }
+    } catch (err: any) {
+      alert('İçe aktarma sırasında beklenmedik hata: ' + err.message)
+    } finally {
+      setFilezillaLoading(false)
+    }
+  }
+
+  const handleExportFileZilla = async (): Promise<void> => {
+    setFilezillaLoading(true)
+    try {
+      const res = await window.api.exportFileZilla()
+      if (res && res.error) {
+        alert('FileZilla Dışa Aktarma Hatası: ' + res.error)
+      } else if (res && res.success) {
+        alert('Tüm bağlantılarınız başarıyla FileZilla XML formatında kaydedildi!')
+      }
+    } catch (err: any) {
+      alert('Dışa aktarma sırasında beklenmedik hata: ' + err.message)
+    } finally {
+      setFilezillaLoading(false)
+    }
   }
 
   const handleEditClick = (conn: Connection): void => {
@@ -312,6 +346,30 @@ export const HostList: React.FC<HostListProps> = ({ onConnect, isUnlocked, onUnl
             <Sparkles size={16} strokeWidth={3} />
             Kendi PC Analizi
           </motion.button>
+
+          <motion.button
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleImportFileZilla}
+            disabled={filezillaLoading}
+            className="flex items-center gap-2 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/30 hover:bg-slate-100 dark:hover:bg-slate-900 text-slate-700 dark:text-slate-350 text-xs font-black transition-all duration-300 shadow-sm uppercase tracking-wider cursor-pointer disabled:opacity-50"
+            title="FileZilla Site Yöneticisi XML dosyasından bağlantıları içe aktar"
+          >
+            <Upload size={14} strokeWidth={2.5} />
+            İçe Aktar
+          </motion.button>
+
+          <motion.button
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleExportFileZilla}
+            disabled={filezillaLoading}
+            className="flex items-center gap-2 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/30 hover:bg-slate-100 dark:hover:bg-slate-900 text-slate-700 dark:text-slate-350 text-xs font-black transition-all duration-300 shadow-sm uppercase tracking-wider cursor-pointer disabled:opacity-50"
+            title="Tüm bağlantıları FileZilla XML olarak dışa aktar"
+          >
+            <Download size={14} strokeWidth={2.5} />
+            Dışa Aktar
+          </motion.button>
           
           <motion.button
             whileHover={{ scale: 1.03 }}
@@ -320,7 +378,7 @@ export const HostList: React.FC<HostListProps> = ({ onConnect, isUnlocked, onUnl
               resetForm()
               setShowAddModal(true)
             }}
-            className="flex items-center gap-2 px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black transition-all duration-300 shadow-lg shadow-indigo-600/20 uppercase tracking-wider cursor-pointer"
+            className="flex items-center gap-2 px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-750 text-white text-xs font-black transition-all duration-300 shadow-lg shadow-indigo-650/20 uppercase tracking-wider cursor-pointer"
           >
             <Plus size={16} strokeWidth={3} />
             Yeni Bağlantı

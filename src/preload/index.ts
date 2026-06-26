@@ -107,7 +107,9 @@ const api = {
   openPath: (filePath: string) => ipcRenderer.invoke('win:open-path', filePath),
   showItemInFolder: (filePath: string) => ipcRenderer.invoke('win:show-item-in-folder', filePath),
   exportJson: (systemData: any) => ipcRenderer.invoke('system:export-json', systemData),
-  exportExcel: (systemData: any) => ipcRenderer.invoke('system:export-excel', systemData)
+  exportExcel: (systemData: any) => ipcRenderer.invoke('system:export-excel', systemData),
+  importFileZilla: () => ipcRenderer.invoke('db:import-filezilla'),
+  exportFileZilla: () => ipcRenderer.invoke('db:export-filezilla')
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

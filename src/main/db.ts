@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3'
-import { app, ipcMain } from 'electron'
+import { app, ipcMain, dialog, BrowserWindow } from 'electron'
 import { join } from 'path'
 import * as fs from 'fs'
 import * as crypto from 'crypto'
@@ -351,6 +351,173 @@ export function registerDBIPC(): void {
   ipcMain.handle('db:save-setting', (_, { key, value }) => {
     saveSetting(key, value)
     return true
+  })
+
+  ipcMain.handle('db:import-filezilla', async (event) => {
+    if (!isUnlocked()) {
+      return { error: 'Veritabanı kilitli. Lütfen önce kasanın kilidini açın.' }
+    }
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const result = await dialog.showOpenDialog(win as any, {
+      title: 'FileZilla XML İçe Aktar',
+      filters: [{ name: 'XML Files', extensions: ['xml'] }],
+      properties: ['openFile']
+    })
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return { success: false, reason: 'cancelled' }
+    }
+
+    try {
+      const filePath = result.filePaths[0]
+      const xmlContent = fs.readFileSync(filePath, 'utf8')
+
+      // Simple regex parser for FileZilla Server elements
+      const serverRegex = /<Server>([\s\S]*?)<\/Server>/g
+      let match
+      let importedCount = 0
+
+      while ((match = serverRegex.exec(xmlContent)) !== null) {
+        const serverBlock = match[1]
+
+        const hostMatch = /<Host>(.*?)<\/Host>/.exec(serverBlock)
+        const portMatch = /<Port>(.*?)<\/Port>/.exec(serverBlock)
+        const userMatch = /<User>(.*?)<\/User>/.exec(serverBlock)
+        const passMatch = /<Pass(?: encoding="base64")?>(.*?)<\/Pass>/.exec(serverBlock)
+        const protocolMatch = /<Protocol>(.*?)<\/Protocol>/.exec(serverBlock)
+        const nameMatch = /<Name>(.*?)<\/Name>/.exec(serverBlock)
+
+        if (!hostMatch || !userMatch) continue
+
+        const host = hostMatch[1].trim()
+        const username = userMatch[1].trim()
+        const name = nameMatch ? nameMatch[1].trim() : host
+
+        // Protocol: 0 = FTP, 1 = SFTP
+        const filezillaProtocol = protocolMatch ? protocolMatch[1].trim() : '0'
+        let protocol: 'ssh' | 'ftp' = 'ftp'
+        let defaultPort = 21
+
+        if (filezillaProtocol === '1' || filezillaProtocol.toLowerCase().includes('sftp') || filezillaProtocol.toLowerCase().includes('ssh')) {
+          protocol = 'ssh'
+          defaultPort = 22
+        }
+
+        const port = portMatch ? parseInt(portMatch[1].trim()) || defaultPort : defaultPort
+
+        let password = ''
+        if (passMatch) {
+          const passVal = passMatch[1].trim()
+          const isBase64 = passMatch[0].includes('encoding="base64"')
+          if (isBase64 && passVal) {
+            try {
+              password = Buffer.from(passVal, 'base64').toString('utf8')
+            } catch (e) {
+              password = passVal
+            }
+          } else {
+            password = passVal
+          }
+        }
+
+        // Add connection
+        const conn: Connection = {
+          name,
+          host,
+          port,
+          username,
+          auth_type: 'password',
+          password,
+          favorite: 0,
+          protocol
+        }
+
+        addConnection(conn)
+        importedCount++
+      }
+
+      return { success: true, count: importedCount }
+    } catch (e: any) {
+      console.error('FileZilla import failed:', e)
+      return { error: e.message }
+    }
+  })
+
+  ipcMain.handle('db:export-filezilla', async (event) => {
+    if (!isUnlocked()) {
+      return { error: 'Veritabanı kilitli. Lütfen önce kasanın kilidini açın.' }
+    }
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const result = await dialog.showSaveDialog(win as any, {
+      title: 'FileZilla XML Dışa Aktar',
+      defaultPath: 'FileZilla_Export.xml',
+      filters: [{ name: 'XML Files', extensions: ['xml'] }]
+    })
+
+    if (result.canceled || !result.filePath) {
+      return { success: false, reason: 'cancelled' }
+    }
+
+    try {
+      const connections = getConnections()
+
+      let xml = '<?xml version="1.0" encoding="UTF-8"?>\n'
+      xml += '<FileZilla3 version="3.70.6" platform="windows">\n'
+      xml += '  <Servers>\n'
+
+      for (const conn of connections) {
+        const nameEscaped = escapeXml(conn.name)
+        const hostEscaped = escapeXml(conn.host)
+        const userEscaped = escapeXml(conn.username)
+        const portVal = conn.port
+
+        // Map protocol to FileZilla: 0 = FTP, 1 = SFTP
+        const protocolVal = conn.protocol === 'ssh' ? 1 : 0
+        const passBase64 = conn.password ? Buffer.from(conn.password).toString('base64') : ''
+
+        xml += '    <Server>\n'
+        xml += `      <Host>${hostEscaped}</Host>\n`
+        xml += `      <Port>${portVal}</Port>\n`
+        xml += `      <Protocol>${protocolVal}</Protocol>\n`
+        xml += `      <Type>1</Type>\n`
+        xml += `      <User>${userEscaped}</User>\n`
+        if (passBase64) {
+          xml += `      <Pass encoding="base64">${passBase64}</Pass>\n`
+        } else {
+          xml += `      <Pass></Pass>\n`
+        }
+        xml += `      <Logontype>1</Logontype>\n`
+        xml += `      <PasvMode>MODE_DEFAULT</PasvMode>\n`
+        xml += `      <EncodingType>UTF-8</EncodingType>\n`
+        xml += `      <BypassProxy>0</BypassProxy>\n`
+        xml += `      <Name>${nameEscaped}</Name>\n`
+        xml += `      <SyncBrowsing>0</SyncBrowsing>\n`
+        xml += `      <DirectoryComparison>0</DirectoryComparison>\n`
+        xml += '    </Server>\n'
+      }
+
+      xml += '  </Servers>\n'
+      xml += '</FileZilla3>\n'
+
+      fs.writeFileSync(result.filePath, xml, 'utf8')
+      return { success: true }
+    } catch (e: any) {
+      console.error('FileZilla export failed:', e)
+      return { error: e.message }
+    }
+  })
+}
+
+function escapeXml(unsafe: string): string {
+  return unsafe.replace(/[<>&'"]/g, (c) => {
+    switch (c) {
+      case '<': return '&lt;'
+      case '>': return '&gt;'
+      case '&': return '&amp;'
+      case '\'': return '&apos;'
+      case '"': return '&quot;'
+      default: return c
+    }
   })
 }
 
